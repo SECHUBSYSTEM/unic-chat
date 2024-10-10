@@ -1,51 +1,53 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { HfInference } from "@huggingface/inference";
 
-const HF_TOKEN = process.env.HUGGINGFACE_API_TOKEN!;
+const HF_TOKEN = process.env.HUGGINGFACE_API_TOKEN;
+if (!HF_TOKEN) {
+  throw new Error("HUGGINGFACE_API_TOKEN is not set in environment variables");
+}
+
 const inference = new HfInference(HF_TOKEN);
 const MODEL = "microsoft/Phi-3-mini-4k-instruct";
 
 export const runtime = "edge";
 
+interface Message {
+  role: string;
+  content: string;
+}
+
 export async function POST(req: NextRequest) {
+  const encoder = new TextEncoder();
+
   try {
-    const { messages } = await req.json();
+    const { messages }: { messages: Message[] } = await req.json();
 
-    const stream = await inference.chatCompletionStream({
+    const stream = await inference.textGenerationStream({
       model: MODEL,
-      messages,
-      temperature: 0.5,
-      max_tokens: 1000,
-      top_p: 0.7,
+      inputs:
+        messages.map((m) => `${m.role}: ${m.content}`).join("\n") +
+        "\nassistant:",
+      parameters: {
+        max_new_tokens: 1000,
+        temperature: 0.7,
+        top_p: 0.95,
+        repetition_penalty: 1.15,
+      },
     });
-
-    const encoder = new TextEncoder();
 
     return new Response(
       new ReadableStream({
         async start(controller) {
-          try {
-            for await (const chunk of stream) {
-              const content = chunk.choices[0]?.delta?.content || "";
-              if (content) {
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-                );
-              }
+          for await (const chunk of stream) {
+            const content = chunk.token.text;
+            if (content) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+              );
             }
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          } catch (error) {
-            console.error("Streaming error:", error);
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({
-                  error: "Streaming error occurred",
-                })}\n\n`
-              )
-            );
-          } finally {
-            controller.close();
           }
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
         },
       }),
       {
@@ -58,14 +60,9 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     console.error("Chat API error:", error);
-    return new Response(
-      JSON.stringify({
-        error: "An error occurred while processing your request",
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+    return NextResponse.json(
+      { error: "An error occurred while processing your request" },
+      { status: 500 }
     );
   }
 }

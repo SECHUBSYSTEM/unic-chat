@@ -48,7 +48,6 @@ export default function ChatInterface() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
     useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -110,44 +109,49 @@ export default function ChatInterface() {
 
   const handleSendMessage = useCallback(async () => {
     if (inputContent.trim()) {
-      const newMessage: Message = {
+      const newUserMessage: Message = {
         id: Date.now(),
         role: "user",
         content: inputContent,
       };
-      setMessages((prev) => [...prev, newMessage]);
+      setMessages((prev) => [...prev, newUserMessage]);
       setInputContent("");
-      setIsGenerating(true);
+
+      const newAssistantMessage: Message = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: "",
+      };
+      setMessages((prev) => [...prev, newAssistantMessage]);
 
       try {
-        const cancel = await sendMessage(
+        await sendMessage(
           messages
-            .concat(newMessage)
+            .concat(newUserMessage)
             .map(({ role, content }) => ({ role, content })),
           (chunk) => {
-            setMessages((prev) => {
-              const lastMessage = prev[prev.length - 1];
-              if (lastMessage.role === "assistant") {
-                return prev.map((msg) =>
-                  msg.id === lastMessage.id
-                    ? { ...msg, content: msg.content + chunk }
-                    : msg
-                );
-              } else {
-                return [
-                  ...prev,
-                  { id: Date.now(), role: "assistant", content: chunk },
-                ];
-              }
-            });
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === newAssistantMessage.id
+                  ? { ...msg, content: msg.content + chunk }
+                  : msg
+              )
+            );
           }
         );
-
-        return cancel;
       } catch (error) {
         console.error("Error sending message:", error);
-      } finally {
-        setIsGenerating(false);
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === newAssistantMessage.id
+              ? {
+                  ...msg,
+                  content:
+                    "I'm sorry, but I encountered an error while processing your request. Please try again.",
+                }
+              : msg
+          )
+        );
       }
     }
   }, [inputContent, messages, sendMessage]);
@@ -313,9 +317,9 @@ export default function ChatInterface() {
                   >
                     <div className="flex items-center mb-2">
                       {message.role === "assistant" ? (
-                        <Bot className="mr-2 h-5 w-5 text-blue-500" />
+                        <Bot className="mr-2 h-5 w-5 text-blue-900" />
                       ) : (
-                        <Users className="mr-2 h-5 w-5 text-green-500" />
+                        <Users className="mr-2 h-5 w-5 text-green-900" />
                       )}
                       <span className="font-semibold text-sm sm:text-base">
                         {message.role === "assistant" ? "AI Assistant" : "You"}
@@ -391,21 +395,21 @@ export default function ChatInterface() {
               <Button
                 size="icon"
                 variant="ghost"
-                className="rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
+                className="rounded-full hover:bg-gray-200 dark:hover:bg-gray-700  transition-colors duration-200"
               >
                 <Mic className="h-4 w-4" />
               </Button>
               <Button
                 size="icon"
                 className={`rounded-full ${
-                  inputContent.trim() || isGenerating
-                    ? "bg-blue-500  hover:bg-blue-600"
+                  inputContent.trim() || isLoading
+                    ? "bg-blue-500 hover:bg-blue-600"
                     : "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
                 } text-white shadow-md transition-all duration-200`}
                 onClick={handleSendMessage}
-                disabled={!inputContent.trim() && !isGenerating}
+                disabled={!inputContent.trim() || isLoading}
               >
-                {isGenerating ? (
+                {isLoading ? (
                   <Pause className="h-4 w-4" />
                 ) : (
                   <Send className="h-4 w-4" />
