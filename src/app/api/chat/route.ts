@@ -27,9 +27,11 @@ export async function POST(req: NextRequest) {
           try {
             for await (const chunk of stream) {
               const content = chunk.choices[0]?.delta?.content || "";
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
-              );
+              if (content) {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                );
+              }
             }
             controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch (error) {

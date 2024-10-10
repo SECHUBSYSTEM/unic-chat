@@ -54,8 +54,7 @@ export default function ChatInterface() {
     {
       id: 1,
       role: "assistant",
-      content:
-        "How can I help you today to ensure your prompts yield the best possible results?",
+      content: "How can I help you today?",
     },
   ]);
   const [inputContent, setInputContent] = useState("");
@@ -144,10 +143,10 @@ export default function ChatInterface() {
           }
         );
 
-        setIsGenerating(false);
         return cancel;
       } catch (error) {
         console.error("Error sending message:", error);
+      } finally {
         setIsGenerating(false);
       }
     }
@@ -384,7 +383,7 @@ export default function ChatInterface() {
                 value={inputContent}
                 onChange={setInputContent}
                 placeholder="Type your message here..."
-                minHeight="50px"
+                minHeight="35px"
               />
             </div>
             <div className="flex-shrink-0 flex items-center space-x-2">
@@ -400,7 +399,7 @@ export default function ChatInterface() {
                 size="icon"
                 className={`rounded-full ${
                   inputContent.trim() || isGenerating
-                    ? "bg-blue-500 hover:bg-blue-600"
+                    ? "bg-blue-500  hover:bg-blue-600"
                     : "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
                 } text-white shadow-md transition-all duration-200`}
                 onClick={handleSendMessage}

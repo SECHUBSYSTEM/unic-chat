@@ -16,7 +16,7 @@ export const WYSIWYGEditor: React.FC<WYSIWYGEditorProps> = ({
   value,
   onChange,
   placeholder = "Type your message here...",
-  minHeight = "50px",
+  minHeight = "35px",
 }) => {
   const editor = useEditor({
     extensions: [
