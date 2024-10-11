@@ -362,7 +362,7 @@ export default function ChatInterface() {
         {/* Chat Area */}
         <div className="flex-1 overflow-hidden pt-16 pb-24">
           <ScrollArea
-            className="h-full p-4 space-y-4 overflow-y-auto"
+            className="h-full p-2 sm:p-4 space-y-4 overflow-y-auto"
             ref={scrollAreaRef}
           >
             <AnimatePresence>
@@ -380,19 +380,19 @@ export default function ChatInterface() {
                   } mb-4`}
                 >
                   <div
-                    className={`w-3/4 p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
+                    className={`w-full sm:w-auto sm:max-w-[80%] md:max-w-2xl p-3 sm:p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
                       message.role === "assistant"
                         ? "bg-blue-50 dark:bg-gray-800"
                         : "bg-white dark:bg-gray-700"
                     }`}
                   >
-                    <div className="flex items-center mb-2">
+                    <div className="flex items-center mb-2 text-sm sm:text-base">
                       {message.role === "assistant" ? (
-                        <Bot className="mr-2 h-5 w-5 text-blue-500" />
+                        <Bot className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
                       ) : (
-                        <Users className="mr-2 h-5 w-5 text-green-500" />
+                        <Users className="mr-2 h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                       )}
-                      <span className="font-semibold text-sm sm:text-base">
+                      <span className="font-semibold">
                         {message.role === "assistant" ? "AI Assistant" : "You"}
                       </span>
                       <div className="flex space-x-2">
@@ -472,12 +472,13 @@ export default function ChatInterface() {
         </div>
 
         {/* Floating Input Area */}
-        <div className="bg-white dark:bg-gray-800 p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg fixed bottom-0 left-0 right-0 z-10">
+        <div className="bg-white dark:bg-gray-800 p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg fixed bottom-0 left-0 right-0 z-10">
           <div className="flex items-end space-x-2 max-w-4xl mx-auto">
             <div className="flex-shrink-0 flex items-center space-x-0">
               <CommandInsertion onInsert={handleInsertCommand} />
             </div>
-            <div className="flex-grow">
+            <div className="flex-grow w-full sm:max-w-2xl">
+              {" "}
               <WYSIWYGEditor
                 content={inputContent}
                 onChange={setInputContent}

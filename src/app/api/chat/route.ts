@@ -28,10 +28,9 @@ export async function POST(req: NextRequest) {
         messages.map((m) => `${m.role}: ${m.content}`).join("\n") +
         "\nassistant:",
       parameters: {
-        max_new_tokens: 1000,
-        temperature: 0.7,
-        top_p: 0.95,
-        repetition_penalty: 1.15,
+        max_new_tokens: 1024,
+        temperature: 0.5,
+        top_p: 0.7,
       },
     });
 

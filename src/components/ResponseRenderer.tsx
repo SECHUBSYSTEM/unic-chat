@@ -28,6 +28,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
       .replace(/<bgcolor="#[^"]*">/g, "")
       .replace(/\[\[[^\]]*\]\]/g, "")
       .replace(/\{\{[^}]*\}\}/g, "")
+      .replace(/<\/?p>/g, "")
       .replace(/<<[^>]*>>/g, "")
       .replace(/\*\*AI Assistant\*\*/g, "")
       .replace(/<li class="[^"]*">/g, "<li>") // Remove custom classes from list items
