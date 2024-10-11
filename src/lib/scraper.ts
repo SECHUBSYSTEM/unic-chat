@@ -18,7 +18,8 @@ export async function scrapeWebsite(
   url: string,
   maxExecutionTime: number = 60000, // Default to 60 seconds
   filter: boolean = false,
-  store: boolean = false
+  store: boolean = false,
+  maxWords: number = 1500
 ): Promise<string> {
   try {
     const response = await axios.get(url, {
@@ -43,6 +44,12 @@ export async function scrapeWebsite(
 
     // Clean up whitespace
     text = text.replace(/\s+/g, " ").trim();
+
+    // Apply word limit
+    const words = text.split(/\s+/);
+    if (words.length > maxWords) {
+      text = words.slice(0, maxWords).join(" ") + "...";
+    }
 
     console.log(`Extracted ${text.length} characters of cleaned text`);
 

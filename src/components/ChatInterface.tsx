@@ -24,12 +24,12 @@ import {
   MoreHorizontal,
   Sun,
   Moon,
-  Pause,
   Edit,
   Copy,
   RotateCcw,
   Check,
   X,
+  StopCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WYSIWYGEditor } from "./Editor";
@@ -37,7 +37,7 @@ import { CommandInsertion } from "./CommandInsertion";
 import { ResponseRenderer } from "./ResponseRenderer";
 import { useCommandExecution } from "@/hooks/useCommandExecution";
 import { useLLMAPI } from "@/hooks/useLLMAPI";
-import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
 import { toast } from "@/hooks/use-toast";
 
 interface Message {
@@ -49,6 +49,7 @@ interface Message {
 export default function ChatInterface() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] =
     useState<boolean>(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([
@@ -59,9 +60,10 @@ export default function ChatInterface() {
     },
   ]);
   const [inputContent, setInputContent] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const mobileSidebarRef = useRef<HTMLDivElement>(null);
-  const editInputRef = useRef<HTMLInputElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +72,12 @@ export default function ChatInterface() {
     isExecuting,
     error: commandError,
   } = useCommandExecution();
-  const { sendMessage, isLoading, error: llmError } = useLLMAPI();
+  const {
+    sendMessage,
+    isLoading,
+    error: llmError,
+    stopGeneration,
+  } = useLLMAPI();
 
   const toggleMobileSidebar = () => setIsMobileSidebarOpen((prev) => !prev);
   const toggleTheme = () => setIsDarkMode((prev) => !prev);
@@ -96,8 +103,8 @@ export default function ChatInterface() {
   }, []);
 
   useEffect(() => {
-    if (editingMessageId !== null && editInputRef.current) {
-      editInputRef.current.focus();
+    if (editingMessageId !== null && editTextareaRef.current) {
+      editTextareaRef.current.focus();
     }
   }, [editingMessageId]);
 
@@ -110,75 +117,107 @@ export default function ChatInterface() {
     }
   }, [messages]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        toast({
-          title: "Copied to clipboard",
-          description: "The message has been copied to your clipboard.",
-        });
-      })
-      .catch((err) => {
-        console.error("Failed to copy text: ", err);
-      });
-  };
+  const handleSendMessage = useCallback(async () => {
+    if (inputContent.trim()) {
+      // Execute commands if present
+      const commandRegex = /\[include-url:[^\]]+\]/g;
+      const commands = inputContent.match(commandRegex);
 
-  const handleSendMessage = useCallback(
-    async (event?: React.MouseEvent<HTMLButtonElement>) => {
       let content = inputContent;
-      if (content.trim()) {
-        // Execute commands if present
-        const commandRegex = /\[include-url:[^\]]+\]/g;
-        const commands = content.match(commandRegex);
-
-        if (commands) {
-          for (const command of commands) {
-            try {
-              const result = await executeCommand(command);
-              content = content.replace(command, result);
-            } catch (error) {
-              console.error("Error executing command:", error);
-              toast({
-                title: "Error",
-                description:
-                  error instanceof Error
-                    ? error.message
-                    : "An error occurred while executing the command",
-                variant: "destructive",
-              });
-              return; // Stop processing if there's an error
-            }
+      if (commands) {
+        for (const command of commands) {
+          try {
+            const result = await executeCommand(command);
+            content = content.replace(command, result);
+          } catch (error) {
+            console.error("Error executing command:", error);
+            toast({
+              title: "Error",
+              description:
+                error instanceof Error
+                  ? error.message
+                  : "An error occurred while executing the command",
+              variant: "destructive",
+            });
+            return; // Stop processing if there's an error
           }
         }
+      }
 
-        const newUserMessage: Message = {
-          id: Date.now(),
-          role: "user",
-          content: content,
-        };
-        setMessages((prev) => [...prev, newUserMessage]);
-        setInputContent("");
+      const newUserMessage: Message = {
+        id: Date.now(),
+        role: "user",
+        content: content,
+      };
+      setMessages((prev) => [...prev, newUserMessage]);
+      setInputContent("");
+
+      const newAssistantMessage: Message = {
+        id: Date.now() + 1,
+        role: "assistant",
+        content: "",
+      };
+      setMessages((prev) => [...prev, newAssistantMessage]);
+
+      setIsGenerating(true);
+      try {
+        await sendMessage(
+          messages
+            .concat(newUserMessage)
+            .map(({ role, content }) => ({ role, content })),
+          (chunk) => {
+            setMessages((prev) => {
+              const lastMessage = prev[prev.length - 1];
+              if (lastMessage.role === "assistant") {
+                return [
+                  ...prev.slice(0, -1),
+                  { ...lastMessage, content: lastMessage.content + chunk },
+                ];
+              }
+              return prev;
+            });
+          }
+        );
+      } catch (error) {
+        console.error("Error sending message:", error);
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            ...prev[prev.length - 1],
+            content:
+              "I'm sorry, but I encountered an error while processing your request. Please try again.",
+          },
+        ]);
+      } finally {
+        setIsGenerating(false);
+      }
+    }
+  }, [inputContent, messages, sendMessage, executeCommand]);
+
+  const retryLastMessage = useCallback(async () => {
+    if (messages.length > 1) {
+      const lastUserMessage = messages.filter((m) => m.role === "user").pop();
+      if (lastUserMessage) {
+        // Remove the last assistant message
+        setMessages((prev) => prev.slice(0, -1));
 
         const newAssistantMessage: Message = {
-          id: Date.now() + 1,
+          id: Date.now(),
           role: "assistant",
           content: "",
         };
         setMessages((prev) => [...prev, newAssistantMessage]);
 
+        setIsGenerating(true);
         try {
           await sendMessage(
             messages
-              .concat(newUserMessage)
+              .slice(0, -1)
+              .concat(lastUserMessage)
               .map(({ role, content }) => ({ role, content })),
             (chunk) => {
               setMessages((prev) => {
@@ -194,7 +233,7 @@ export default function ChatInterface() {
             }
           );
         } catch (error) {
-          console.error("Error sending message:", error);
+          console.error("Error retrying message:", error);
           setMessages((prev) => [
             ...prev.slice(0, -1),
             {
@@ -203,34 +242,20 @@ export default function ChatInterface() {
                 "I'm sorry, but I encountered an error while processing your request. Please try again.",
             },
           ]);
+        } finally {
+          setIsGenerating(false);
         }
       }
-    },
-    [inputContent, messages, sendMessage, executeCommand]
-  );
-
-  const retryLastMessage = useCallback(
-    async (event?: React.MouseEvent<HTMLButtonElement>) => {
-      if (messages.length > 1) {
-        const lastUserMessage = messages.filter((m) => m.role === "user").pop();
-        if (lastUserMessage) {
-          // Remove the last assistant message
-          setMessages((prev) => prev.slice(0, -1));
-          // Retry sending the last user message
-          await handleSendMessage();
-        }
-      }
-    },
-    [messages, handleSendMessage]
-  );
+    }
+  }, [messages, sendMessage]);
 
   const handleEditMessage = (id: number) => {
     setEditingMessageId(id);
   };
 
-  const handleSaveEdit = (id: number) => {
-    if (editInputRef.current) {
-      const editedContent = editInputRef.current.value;
+  const handleSaveEdit = async (id: number) => {
+    if (editTextareaRef.current) {
+      const editedContent = editTextareaRef.current.value;
       if (editedContent.trim()) {
         setMessages((prev) =>
           prev.map((msg) =>
@@ -238,9 +263,72 @@ export default function ChatInterface() {
           )
         );
         setEditingMessageId(null);
-        handleSendMessage();
+
+        // Find the edited message and all subsequent messages
+        const editedMessageIndex = messages.findIndex((msg) => msg.id === id);
+        const relevantMessages = messages.slice(0, editedMessageIndex + 1);
+
+        // Update the last message to be the edited one
+        relevantMessages[relevantMessages.length - 1] = {
+          ...relevantMessages[relevantMessages.length - 1],
+          content: editedContent,
+        };
+
+        const newAssistantMessage: Message = {
+          id: Date.now(),
+          role: "assistant",
+          content: "",
+        };
+        setMessages((prev) => [...prev, newAssistantMessage]);
+
+        setIsGenerating(true);
+        try {
+          await sendMessage(
+            relevantMessages.map(({ role, content }) => ({ role, content })),
+            (chunk) => {
+              setMessages((prev) => {
+                const lastMessage = prev[prev.length - 1];
+                if (lastMessage.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...lastMessage, content: lastMessage.content + chunk },
+                  ];
+                }
+                return prev;
+              });
+            }
+          );
+        } catch (error) {
+          console.error("Error regenerating response:", error);
+          setMessages((prev) => [
+            ...prev.slice(0, -1),
+            {
+              ...prev[prev.length - 1],
+              content:
+                "I'm sorry, but I encountered an error while processing your request. Please try again.",
+            },
+          ]);
+        } finally {
+          setIsGenerating(false);
+        }
       }
     }
+  };
+
+  const copyToClipboard = (id: number, text: string) => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopiedMessageId(id);
+        setTimeout(() => setCopiedMessageId(null), 2000);
+        toast({
+          title: "Copied to clipboard",
+          description: "The message has been copied to your clipboard.",
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to copy text: ", err);
+      });
   };
 
   const handleCancelEdit = () => {
@@ -257,6 +345,17 @@ export default function ChatInterface() {
     }
   };
 
+  const handleStopGeneration = () => {
+    stopGeneration();
+    setIsGenerating(false);
+  };
+
+  // Fancy loader component
+  const Loader = () => (
+    <div className="flex justify-center items-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+    </div>
+  );
   const Sidebar: React.FC<{ isMobile?: boolean }> = ({ isMobile = false }) => (
     <div
       className={`${
@@ -332,7 +431,7 @@ export default function ChatInterface() {
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="rounded-full transition-colors duration-200"
+              className="rounded-full transition-colors  duration-200"
             >
               {isDarkMode ? (
                 <Sun className="h-5 w-5" />
@@ -395,14 +494,36 @@ export default function ChatInterface() {
                       <span className="font-semibold">
                         {message.role === "assistant" ? "AI Assistant" : "You"}
                       </span>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => copyToClipboard(message.content)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
+                      <div className="flex space-x-2 ml-auto">
+                        <AnimatePresence>
+                          {copiedMessageId === message.id ? (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <Check className="h-4 w-4 text-green-500" />
+                            </motion.div>
+                          ) : (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              exit={{ scale: 0 }}
+                              transition={{ duration: 0.2 }}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  copyToClipboard(message.id, message.content)
+                                }
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                         {message.role === "assistant" && (
                           <Button
                             variant="ghost"
@@ -436,26 +557,30 @@ export default function ChatInterface() {
                       )}
                     </div>
                     {editingMessageId === message.id ? (
-                      <div className="flex items-center mt-2">
-                        <Input
-                          ref={editInputRef}
+                      <div className="flex flex-col mt-2">
+                        <Textarea
+                          ref={editTextareaRef}
                           defaultValue={message.content}
-                          className="flex-grow mr-2"
+                          className="flex-grow mb-2 min-h-[100px]"
                         />
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleSaveEdit(message.id)}
-                        >
-                          <Check className="h-4 w-4 text-green-500" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={handleCancelEdit}
-                        >
-                          <X className="h-4 w-4 text-red-500" />
-                        </Button>
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSaveEdit(message.id)}
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEdit}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <ResponseRenderer
@@ -467,6 +592,7 @@ export default function ChatInterface() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            {isGenerating && <Loader />}
             <div ref={messagesEndRef} />
           </ScrollArea>
         </div>
@@ -477,8 +603,7 @@ export default function ChatInterface() {
             <div className="flex-shrink-0 flex items-center space-x-0">
               <CommandInsertion onInsert={handleInsertCommand} />
             </div>
-            <div className="flex-grow w-full sm:max-w-2xl">
-              {" "}
+            <div className="flex-grow w-full overflow-auto sm:max-w-2xl">
               <WYSIWYGEditor
                 content={inputContent}
                 onChange={setInputContent}
@@ -487,23 +612,28 @@ export default function ChatInterface() {
               />
             </div>
             <div className="flex-shrink-0 flex items-center space-x-2">
-              {" "}
-              <Button
-                size="icon"
-                className={`rounded-full ${
-                  inputContent.trim() || isLoading
-                    ? "bg-blue-500 hover:bg-blue-600"
-                    : "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
-                } text-white shadow-md transition-all duration-200`}
-                onClick={handleSendMessage}
-                disabled={!inputContent.trim() || isLoading}
-              >
-                {isLoading ? (
-                  <Pause className="h-4 w-4" />
-                ) : (
+              {isGenerating ? (
+                <Button
+                  size="icon"
+                  className="rounded-full bg-red-500 hover:bg-red-600 text-white shadow-md transition-all duration-200"
+                  onClick={handleStopGeneration}
+                >
+                  <StopCircle className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  size="icon"
+                  className={`rounded-full ${
+                    inputContent.trim() || isLoading
+                      ? "bg-blue-500 hover:bg-blue-600"
+                      : "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
+                  } text-white shadow-md transition-all duration-200`}
+                  onClick={handleSendMessage}
+                  disabled={!inputContent.trim() || isLoading}
+                >
                   <Send className="h-4 w-4" />
-                )}
-              </Button>
+                </Button>
+              )}
             </div>
           </div>
         </div>

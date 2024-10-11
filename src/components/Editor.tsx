@@ -51,7 +51,7 @@ export const WYSIWYGEditor: React.FC<WYSIWYGEditorProps> = ({
 
   return (
     <div
-      className="border rounded-xl p-4 bg-white dark:bg-gray-600 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow duration-200"
+      className="border rounded-xl p-4 bg-white dark:bg-gray-600 focus-within:ring-2 focus-within:ring-gray-400 transition-shadow duration-200"
       style={{ minHeight }}
     >
       <EditorContent

@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import axios from "axios";
+import { useState, useCallback, useRef } from "react";
+import axios, { CancelTokenSource } from "axios";
 
 interface Message {
   role: string;
@@ -9,24 +9,26 @@ interface Message {
 export function useLLMAPI() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelTokenSourceRef = useRef<CancelTokenSource | null>(null);
 
   const sendMessage = useCallback(
     async (
       messages: Message[],
       onChunk: (chunk: string) => void
-    ): Promise<() => void> => {
+    ): Promise<void> => {
       setIsLoading(true);
       setError(null);
 
-      const source = axios.CancelToken.source();
+      // Create a new CancelTokenSource for this request
+      cancelTokenSourceRef.current = axios.CancelToken.source();
 
       try {
         const response = await axios.post(
           "/api/chat",
           { messages },
           {
-            responseType: "text",
-            cancelToken: source.token,
+            responseType: "stream",
+            cancelToken: cancelTokenSourceRef.current.token,
           }
         );
 
@@ -36,7 +38,7 @@ export function useLLMAPI() {
             const data = line.slice(5).trim();
             if (data === "[DONE]") {
               setIsLoading(false);
-              return () => {};
+              return;
             }
             try {
               const parsed = JSON.parse(data);
@@ -57,13 +59,17 @@ export function useLLMAPI() {
       } finally {
         setIsLoading(false);
       }
-
-      return () => {
-        source.cancel("Operation canceled by the user.");
-      };
     },
     []
   );
 
-  return { sendMessage, isLoading, error };
+  const stopGeneration = useCallback(() => {
+    if (cancelTokenSourceRef.current) {
+      cancelTokenSourceRef.current.cancel("Operation canceled by the user.");
+      cancelTokenSourceRef.current = null;
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { sendMessage, isLoading, error, stopGeneration };
 }

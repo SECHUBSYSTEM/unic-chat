@@ -22,23 +22,22 @@ export async function POST(req: NextRequest) {
   try {
     const { messages }: { messages: Message[] } = await req.json();
 
-    const stream = await inference.textGenerationStream({
+    const stream = await inference.chatCompletionStream({
       model: MODEL,
-      inputs:
-        messages.map((m) => `${m.role}: ${m.content}`).join("\n") +
-        "\nassistant:",
-      parameters: {
-        max_new_tokens: 1024,
-        temperature: 0.5,
-        top_p: 0.7,
-      },
+      messages: messages.map((m) => ({
+        role: m.role as "user" | "assistant" | "system",
+        content: m.content,
+      })),
+      max_tokens: 1024,
+      temperature: 0.5,
+      top_p: 0.7,
     });
 
     return new Response(
       new ReadableStream({
         async start(controller) {
           for await (const chunk of stream) {
-            const content = chunk.token.text;
+            const content = chunk.choices[0]?.delta?.content || "";
             if (content) {
               controller.enqueue(
                 encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)

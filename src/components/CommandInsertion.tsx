@@ -19,7 +19,7 @@ export const CommandInsertion: React.FC<CommandInsertionProps> = ({
   onInsert,
 }) => {
   const [url, setUrl] = useState("");
-  const [maxExecutionTime, setMaxExecutionTime] = useState(300);
+  const [maxExecutionTime, setMaxExecutionTime] = useState(60000);
   const [filter, setFilter] = useState(false);
   const [store, setStore] = useState(false);
   const [isAdvanced, setIsAdvanced] = useState(false);
