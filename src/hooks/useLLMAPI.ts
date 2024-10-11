@@ -25,29 +25,26 @@ export function useLLMAPI() {
           "/api/chat",
           { messages },
           {
-            responseType: "stream",
+            responseType: "text",
             cancelToken: source.token,
           }
         );
 
-        const reader = response.data.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = JSON.parse(line.slice(6));
-              if (data === "[DONE]") {
-                setIsLoading(false);
-                return () => {};
+        const lines = response.data.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(5).trim();
+            if (data === "[DONE]") {
+              setIsLoading(false);
+              return () => {};
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.content) {
+                onChunk(parsed.content);
               }
-              onChunk(data.content);
+            } catch (e) {
+              console.error("Error parsing SSE data:", e);
             }
           }
         }

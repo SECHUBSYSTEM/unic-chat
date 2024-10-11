@@ -6,14 +6,14 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 
 interface WYSIWYGEditorProps {
-  value: string;
+  content: string;
   onChange: (content: string) => void;
   placeholder?: string;
   minHeight?: string;
 }
 
 export const WYSIWYGEditor: React.FC<WYSIWYGEditorProps> = ({
-  value,
+  content,
   onChange,
   placeholder = "Type your message here...",
   minHeight = "35px",
@@ -25,7 +25,7 @@ export const WYSIWYGEditor: React.FC<WYSIWYGEditorProps> = ({
         placeholder,
       }),
     ],
-    content: value,
+    content: content,
     immediatelyRender: false,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
@@ -44,14 +44,14 @@ export const WYSIWYGEditor: React.FC<WYSIWYGEditorProps> = ({
   }, []);
 
   useEffect(() => {
-    if (editor && editor.getHTML() !== value) {
-      editor.commands.setContent(value);
+    if (editor && editor.getHTML() !== content) {
+      editor.commands.setContent(content);
     }
-  }, [value, editor]);
+  }, [content, editor]);
 
   return (
     <div
-      className="border rounded-xl p-4 bg-white dark:bg-gray-800 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow duration-200"
+      className="border rounded-xl p-4 bg-white dark:bg-gray-600 focus-within:ring-2 focus-within:ring-blue-500 transition-shadow duration-200"
       style={{ minHeight }}
     >
       <EditorContent

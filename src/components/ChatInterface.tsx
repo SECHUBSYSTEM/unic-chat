@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -19,7 +19,6 @@ import {
   Trash2,
   Plus,
   ChevronDown,
-  Mic,
   Send,
   Menu,
   MoreHorizontal,
@@ -27,6 +26,8 @@ import {
   Moon,
   Pause,
   Edit,
+  Copy,
+  RotateCcw,
   Check,
   X,
 } from "lucide-react";
@@ -37,6 +38,7 @@ import { ResponseRenderer } from "./ResponseRenderer";
 import { useCommandExecution } from "@/hooks/useCommandExecution";
 import { useLLMAPI } from "@/hooks/useLLMAPI";
 import { Input } from "./ui/input";
+import { toast } from "@/hooks/use-toast";
 
 interface Message {
   id: number;
@@ -100,6 +102,15 @@ export default function ChatInterface() {
   }, [editingMessageId]);
 
   useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTo({
+        top: scrollAreaRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [messages]);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
@@ -107,54 +118,87 @@ export default function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = useCallback(async () => {
-    if (inputContent.trim()) {
-      const newUserMessage: Message = {
-        id: Date.now(),
-        role: "user",
-        content: inputContent,
-      };
-      setMessages((prev) => [...prev, newUserMessage]);
-      setInputContent("");
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        toast({
+          title: "Copied to clipboard",
+          description: "The message has been copied to your clipboard.",
+        });
+      })
+      .catch((err) => {
+        console.error("Failed to copy text: ", err);
+      });
+  };
 
-      const newAssistantMessage: Message = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: "",
-      };
-      setMessages((prev) => [...prev, newAssistantMessage]);
+  const handleSendMessage = useCallback(
+    async (event?: React.MouseEvent<HTMLButtonElement>) => {
+      const content = inputContent;
+      if (content.trim()) {
+        const newUserMessage: Message = {
+          id: Date.now(),
+          role: "user",
+          content: content,
+        };
+        setMessages((prev) => [...prev, newUserMessage]);
+        setInputContent("");
 
-      try {
-        await sendMessage(
-          messages
-            .concat(newUserMessage)
-            .map(({ role, content }) => ({ role, content })),
-          (chunk) => {
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === newAssistantMessage.id
-                  ? { ...msg, content: msg.content + chunk }
-                  : msg
-              )
-            );
-          }
-        );
-      } catch (error) {
-        console.error("Error sending message:", error);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === newAssistantMessage.id
-              ? {
-                  ...msg,
-                  content:
-                    "I'm sorry, but I encountered an error while processing your request. Please try again.",
+        const newAssistantMessage: Message = {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "",
+        };
+        setMessages((prev) => [...prev, newAssistantMessage]);
+
+        try {
+          await sendMessage(
+            messages
+              .concat(newUserMessage)
+              .map(({ role, content }) => ({ role, content })),
+            (chunk) => {
+              setMessages((prev) => {
+                const lastMessage = prev[prev.length - 1];
+                if (lastMessage.role === "assistant") {
+                  return [
+                    ...prev.slice(0, -1),
+                    { ...lastMessage, content: lastMessage.content + chunk },
+                  ];
                 }
-              : msg
-          )
-        );
+                return prev;
+              });
+            }
+          );
+        } catch (error) {
+          console.error("Error sending message:", error);
+          setMessages((prev) => [
+            ...prev.slice(0, -1),
+            {
+              ...prev[prev.length - 1],
+              content:
+                "I'm sorry, but I encountered an error while processing your request. Please try again.",
+            },
+          ]);
+        }
       }
-    }
-  }, [inputContent, messages, sendMessage]);
+    },
+    [inputContent, messages, sendMessage]
+  );
+
+  const retryLastMessage = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (messages.length > 1) {
+        const lastUserMessage = messages.filter((m) => m.role === "user").pop();
+        if (lastUserMessage) {
+          // Remove the last assistant message
+          setMessages((prev) => prev.slice(0, -1));
+          // Retry sending the last user message
+          await handleSendMessage();
+        }
+      }
+    },
+    [messages, handleSendMessage]
+  );
 
   const handleEditMessage = (id: number) => {
     setEditingMessageId(id);
@@ -169,9 +213,9 @@ export default function ChatInterface() {
             msg.id === id ? { ...msg, content: editedContent } : msg
           )
         );
+        setEditingMessageId(null);
         handleSendMessage();
       }
-      setEditingMessageId(null);
     }
   };
 
@@ -293,7 +337,10 @@ export default function ChatInterface() {
 
         {/* Chat Area */}
         <div className="flex-1 overflow-hidden pt-16 pb-24">
-          <ScrollArea className="h-full p-4 space-y-4" ref={scrollAreaRef}>
+          <ScrollArea
+            className="h-full p-4 space-y-4 overflow-y-auto"
+            ref={scrollAreaRef}
+          >
             <AnimatePresence>
               {messages.map((message) => (
                 <motion.div
@@ -309,7 +356,7 @@ export default function ChatInterface() {
                   } mb-4`}
                 >
                   <div
-                    className={`w-3/4 p-4 rounded-xl shadow-md transition-all duration-200 ${
+                    className={`w-3/4 p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
                       message.role === "assistant"
                         ? "bg-blue-50 dark:bg-gray-800"
                         : "bg-white dark:bg-gray-700"
@@ -317,13 +364,31 @@ export default function ChatInterface() {
                   >
                     <div className="flex items-center mb-2">
                       {message.role === "assistant" ? (
-                        <Bot className="mr-2 h-5 w-5 text-blue-900" />
+                        <Bot className="mr-2 h-5 w-5 text-blue-500" />
                       ) : (
-                        <Users className="mr-2 h-5 w-5 text-green-900" />
+                        <Users className="mr-2 h-5 w-5 text-green-500" />
                       )}
                       <span className="font-semibold text-sm sm:text-base">
                         {message.role === "assistant" ? "AI Assistant" : "You"}
                       </span>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => copyToClipboard(message.content)}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        {message.role === "assistant" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={retryLastMessage}
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                       {message.role === "user" && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -369,7 +434,10 @@ export default function ChatInterface() {
                         </Button>
                       </div>
                     ) : (
-                      <ResponseRenderer content={message.content} />
+                      <ResponseRenderer
+                        content={message.content}
+                        isUser={message.role === "user"}
+                      />
                     )}
                   </div>
                 </motion.div>
@@ -382,23 +450,19 @@ export default function ChatInterface() {
         {/* Floating Input Area */}
         <div className="bg-white dark:bg-gray-800 p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg fixed bottom-0 left-0 right-0 z-10">
           <div className="flex items-end space-x-2 max-w-4xl mx-auto">
+            <div className="flex-shrink-0 flex items-center space-x-0">
+              <CommandInsertion onInsert={handleInsertCommand} />
+            </div>
             <div className="flex-grow">
               <WYSIWYGEditor
-                value={inputContent}
+                content={inputContent}
                 onChange={setInputContent}
                 placeholder="Type your message here..."
                 minHeight="35px"
               />
             </div>
             <div className="flex-shrink-0 flex items-center space-x-2">
-              <CommandInsertion onInsert={handleInsertCommand} />
-              <Button
-                size="icon"
-                variant="ghost"
-                className="rounded-full hover:bg-gray-200 dark:hover:bg-gray-700  transition-colors duration-200"
-              >
-                <Mic className="h-4 w-4" />
-              </Button>
+              {" "}
               <Button
                 size="icon"
                 className={`rounded-full ${
