@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import logo from '/logo.svg'
+import logo from "../../public/logo.svg";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
