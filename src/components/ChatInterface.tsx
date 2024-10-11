@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -134,8 +134,32 @@ export default function ChatInterface() {
 
   const handleSendMessage = useCallback(
     async (event?: React.MouseEvent<HTMLButtonElement>) => {
-      const content = inputContent;
+      let content = inputContent;
       if (content.trim()) {
+        // Execute commands if present
+        const commandRegex = /\[include-url:[^\]]+\]/g;
+        const commands = content.match(commandRegex);
+
+        if (commands) {
+          for (const command of commands) {
+            try {
+              const result = await executeCommand(command);
+              content = content.replace(command, result);
+            } catch (error) {
+              console.error("Error executing command:", error);
+              toast({
+                title: "Error",
+                description:
+                  error instanceof Error
+                    ? error.message
+                    : "An error occurred while executing the command",
+                variant: "destructive",
+              });
+              return; // Stop processing if there's an error
+            }
+          }
+        }
+
         const newUserMessage: Message = {
           id: Date.now(),
           role: "user",
@@ -182,11 +206,11 @@ export default function ChatInterface() {
         }
       }
     },
-    [inputContent, messages, sendMessage]
+    [inputContent, messages, sendMessage, executeCommand]
   );
 
   const retryLastMessage = useCallback(
-    async (event: React.MouseEvent<HTMLButtonElement>) => {
+    async (event?: React.MouseEvent<HTMLButtonElement>) => {
       if (messages.length > 1) {
         const lastUserMessage = messages.filter((m) => m.role === "user").pop();
         if (lastUserMessage) {

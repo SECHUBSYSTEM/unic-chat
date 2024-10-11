@@ -5,13 +5,13 @@ export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
   try {
-    const { url, maxExecutionTime } = await req.json();
+    const { url, maxExecutionTime, filter, store } = await req.json();
 
     if (!url) {
       return NextResponse.json({ error: "URL is required" }, { status: 400 });
     }
 
-    const content = await scrapeWebsite(url, maxExecutionTime);
+    const content = await scrapeWebsite(url, maxExecutionTime, filter, store);
     return NextResponse.json({ content });
   } catch (error) {
     console.error("Scrape API error:", error);

@@ -9,7 +9,7 @@ interface CommandOptions {
 }
 
 export const useCommandExecution = () => {
-  const [isExecuting, setIsExecuting] = useState(false);
+  const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const executeCommand = useCallback(
@@ -27,7 +27,7 @@ export const useCommandExecution = () => {
         return command;
       }
 
-      const [, url, maxExecutionTime, filter, store] = match;
+      const [fullMatch, url, maxExecutionTime, filter, store] = match;
       const options: CommandOptions = {
         url,
         maxExecutionTime: parseInt(maxExecutionTime),
@@ -38,11 +38,15 @@ export const useCommandExecution = () => {
       try {
         const response = await axios.post("/api/scrape", options);
         setIsExecuting(false);
-        return response.data.content;
+        return command.replace(fullMatch, response.data.content);
       } catch (err) {
         setIsExecuting(false);
-        setError(err instanceof Error ? err.message : "An error occurred");
-        return command;
+        const errorMessage =
+          axios.isAxiosError(err) && err.response?.data?.error
+            ? err.response.data.error
+            : "An error occurred while scraping the website";
+        setError(errorMessage);
+        return `${command} [Error: ${errorMessage}]`;
       }
     },
     []
