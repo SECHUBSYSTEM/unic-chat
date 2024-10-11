@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import logo from "@/logo.svg";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
@@ -39,6 +40,8 @@ import { useCommandExecution } from "@/hooks/useCommandExecution";
 import { useLLMAPI } from "@/hooks/useLLMAPI";
 import { Textarea } from "./ui/textarea";
 import { toast } from "@/hooks/use-toast";
+import Link from "next/link";
+import Image from "next/image";
 
 interface Message {
   id: number;
@@ -67,25 +70,19 @@ export default function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  const {
-    executeCommand,
-    isExecuting,
-    error: commandError,
-  } = useCommandExecution();
-  const {
-    sendMessage,
-    isLoading,
-    error: llmError,
-    stopGeneration,
-  } = useLLMAPI();
+  const { executeCommand } = useCommandExecution();
+  const { sendMessage, isLoading, stopGeneration } = useLLMAPI();
 
+  // Toggle functions
   const toggleMobileSidebar = () => setIsMobileSidebarOpen((prev) => !prev);
   const toggleTheme = () => setIsDarkMode((prev) => !prev);
 
+  // Effect for theme toggle
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode);
   }, [isDarkMode]);
 
+  // Effect for closing mobile sidebar when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -102,28 +99,32 @@ export default function ChatInterface() {
     };
   }, []);
 
+  // Effect for focusing on edit textarea
   useEffect(() => {
     if (editingMessageId !== null && editTextareaRef.current) {
       editTextareaRef.current.focus();
     }
   }, [editingMessageId]);
 
+  // Effect for scrolling to bottom
   useEffect(() => {
+    scrollToBottom();
+  }, [messages, isGenerating]);
+
+  // Function to scroll to bottom
+  const scrollToBottom = () => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({
         top: scrollAreaRef.current.scrollHeight,
         behavior: "smooth",
       });
     }
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Function to handle sending a message
   const handleSendMessage = useCallback(async () => {
     if (inputContent.trim()) {
-      // Execute commands if present
+      // Check for commands
       const commandRegex = /\[include-url:[^\]]+\]/g;
       const commands = inputContent.match(commandRegex);
 
@@ -143,11 +144,12 @@ export default function ChatInterface() {
                   : "An error occurred while executing the command",
               variant: "destructive",
             });
-            return; // Stop processing if there's an error
+            return;
           }
         }
       }
 
+      // Add user message
       const newUserMessage: Message = {
         id: Date.now(),
         role: "user",
@@ -155,16 +157,10 @@ export default function ChatInterface() {
       };
       setMessages((prev) => [...prev, newUserMessage]);
       setInputContent("");
-
-      const newAssistantMessage: Message = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: "",
-      };
-      setMessages((prev) => [...prev, newAssistantMessage]);
-
       setIsGenerating(true);
+
       try {
+        // Send message to API
         await sendMessage(
           messages
             .concat(newUserMessage)
@@ -177,42 +173,37 @@ export default function ChatInterface() {
                   ...prev.slice(0, -1),
                   { ...lastMessage, content: lastMessage.content + chunk },
                 ];
+              } else {
+                return [
+                  ...prev,
+                  { id: Date.now(), role: "assistant", content: chunk },
+                ];
               }
-              return prev;
             });
           }
         );
       } catch (error) {
         console.error("Error sending message:", error);
-        setMessages((prev) => [
-          ...prev.slice(0, -1),
-          {
-            ...prev[prev.length - 1],
-            content:
-              "I'm sorry, but I encountered an error while processing your request. Please try again.",
-          },
-        ]);
+        toast({
+          title: "Error",
+          description:
+            "An error occurred while processing your request. Please try again.",
+          variant: "destructive",
+        });
       } finally {
         setIsGenerating(false);
       }
     }
   }, [inputContent, messages, sendMessage, executeCommand]);
 
+  // Function to retry last message
   const retryLastMessage = useCallback(async () => {
     if (messages.length > 1) {
       const lastUserMessage = messages.filter((m) => m.role === "user").pop();
       if (lastUserMessage) {
-        // Remove the last assistant message
         setMessages((prev) => prev.slice(0, -1));
-
-        const newAssistantMessage: Message = {
-          id: Date.now(),
-          role: "assistant",
-          content: "",
-        };
-        setMessages((prev) => [...prev, newAssistantMessage]);
-
         setIsGenerating(true);
+
         try {
           await sendMessage(
             messages
@@ -227,21 +218,23 @@ export default function ChatInterface() {
                     ...prev.slice(0, -1),
                     { ...lastMessage, content: lastMessage.content + chunk },
                   ];
+                } else {
+                  return [
+                    ...prev,
+                    { id: Date.now(), role: "assistant", content: chunk },
+                  ];
                 }
-                return prev;
               });
             }
           );
         } catch (error) {
           console.error("Error retrying message:", error);
-          setMessages((prev) => [
-            ...prev.slice(0, -1),
-            {
-              ...prev[prev.length - 1],
-              content:
-                "I'm sorry, but I encountered an error while processing your request. Please try again.",
-            },
-          ]);
+          toast({
+            title: "Error",
+            description:
+              "An error occurred while retrying the message. Please try again.",
+            variant: "destructive",
+          });
         } finally {
           setIsGenerating(false);
         }
@@ -249,10 +242,12 @@ export default function ChatInterface() {
     }
   }, [messages, sendMessage]);
 
+  // Function to handle editing a message
   const handleEditMessage = (id: number) => {
     setEditingMessageId(id);
   };
 
+  // Function to handle saving an edited message
   const handleSaveEdit = async (id: number) => {
     if (editTextareaRef.current) {
       const editedContent = editTextareaRef.current.value;
@@ -264,24 +259,15 @@ export default function ChatInterface() {
         );
         setEditingMessageId(null);
 
-        // Find the edited message and all subsequent messages
         const editedMessageIndex = messages.findIndex((msg) => msg.id === id);
         const relevantMessages = messages.slice(0, editedMessageIndex + 1);
-
-        // Update the last message to be the edited one
         relevantMessages[relevantMessages.length - 1] = {
           ...relevantMessages[relevantMessages.length - 1],
           content: editedContent,
         };
 
-        const newAssistantMessage: Message = {
-          id: Date.now(),
-          role: "assistant",
-          content: "",
-        };
-        setMessages((prev) => [...prev, newAssistantMessage]);
-
         setIsGenerating(true);
+
         try {
           await sendMessage(
             relevantMessages.map(({ role, content }) => ({ role, content })),
@@ -293,21 +279,23 @@ export default function ChatInterface() {
                     ...prev.slice(0, -1),
                     { ...lastMessage, content: lastMessage.content + chunk },
                   ];
+                } else {
+                  return [
+                    ...prev,
+                    { id: Date.now(), role: "assistant", content: chunk },
+                  ];
                 }
-                return prev;
               });
             }
           );
         } catch (error) {
           console.error("Error regenerating response:", error);
-          setMessages((prev) => [
-            ...prev.slice(0, -1),
-            {
-              ...prev[prev.length - 1],
-              content:
-                "I'm sorry, but I encountered an error while processing your request. Please try again.",
-            },
-          ]);
+          toast({
+            title: "Error",
+            description:
+              "An error occurred while regenerating the response. Please try again.",
+            variant: "destructive",
+          });
         } finally {
           setIsGenerating(false);
         }
@@ -315,6 +303,7 @@ export default function ChatInterface() {
     }
   };
 
+  // Function to copy message to clipboard
   const copyToClipboard = (id: number, text: string) => {
     navigator.clipboard
       .writeText(text)
@@ -328,13 +317,20 @@ export default function ChatInterface() {
       })
       .catch((err) => {
         console.error("Failed to copy text: ", err);
+        toast({
+          title: "Error",
+          description: "Failed to copy text to clipboard.",
+          variant: "destructive",
+        });
       });
   };
 
+  // Function to cancel editing
   const handleCancelEdit = () => {
     setEditingMessageId(null);
   };
 
+  // Function to insert a command
   const handleInsertCommand = async (command: string) => {
     setInputContent((prev) => prev + command);
     try {
@@ -342,20 +338,28 @@ export default function ChatInterface() {
       setInputContent((prev) => prev.replace(command, result));
     } catch (error) {
       console.error("Error executing command:", error);
+      toast({
+        title: "Error",
+        description: "An error occurred while executing the command.",
+        variant: "destructive",
+      });
     }
   };
 
+  // Function to stop generation
   const handleStopGeneration = () => {
     stopGeneration();
     setIsGenerating(false);
   };
 
-  // Fancy loader component
+  // Loader component
   const Loader = () => (
-    <div className="flex justify-center items-center">
+    <div className="flex justify-center items-center p-4">
       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
     </div>
   );
+
+  // Sidebar component
   const Sidebar: React.FC<{ isMobile?: boolean }> = ({ isMobile = false }) => (
     <div
       className={`${
@@ -393,6 +397,7 @@ export default function ChatInterface() {
     <div
       className={`flex h-screen overflow-hidden ${isDarkMode ? "dark" : ""}`}
     >
+      {/* Desktop Sidebar */}
       <div className="hidden md:block w-72">
         <Sidebar />
       </div>
@@ -413,7 +418,7 @@ export default function ChatInterface() {
           )}
         </AnimatePresence>
 
-        {/* Floating Header */}
+        {/* Header */}
         <header className="bg-white dark:bg-gray-800 p-4 flex justify-between items-center border-b border-gray-200 dark:border-gray-700 shadow-sm fixed top-0 left-0 right-0 z-10">
           <div className="flex items-center space-x-4">
             <Button
@@ -424,14 +429,16 @@ export default function ChatInterface() {
             >
               <Menu className="h-6 w-6" />
             </Button>
-            <h1 className="text-xl font-bold">Chat UI</h1>
+            <Link href="/">
+              <Image src={logo} height={50} width={50} alt="logo" />
+            </Link>
           </div>
           <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
               size="icon"
               onClick={toggleTheme}
-              className="rounded-full transition-colors  duration-200"
+              className="rounded-full transition-colors duration-200"
             >
               {isDarkMode ? (
                 <Sun className="h-5 w-5" />
@@ -597,7 +604,7 @@ export default function ChatInterface() {
           </ScrollArea>
         </div>
 
-        {/* Floating Input Area */}
+        {/* Input Area */}
         <div className="bg-white dark:bg-gray-800 p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg fixed bottom-0 left-0 right-0 z-10">
           <div className="flex items-end space-x-2 max-w-4xl mx-auto">
             <div className="flex-shrink-0 flex items-center space-x-0">
