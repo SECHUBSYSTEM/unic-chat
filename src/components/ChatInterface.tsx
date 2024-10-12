@@ -180,6 +180,7 @@ export default function ChatInterface() {
                 ];
               }
             });
+            scrollToBottom();
           }
         );
       } catch (error) {
@@ -225,6 +226,7 @@ export default function ChatInterface() {
                   ];
                 }
               });
+              scrollToBottom();
             }
           );
         } catch (error) {
@@ -286,6 +288,7 @@ export default function ChatInterface() {
                   ];
                 }
               });
+              scrollToBottom();
             }
           );
         } catch (error) {
@@ -429,6 +432,7 @@ export default function ChatInterface() {
             >
               <Menu className="h-6 w-6" />
             </Button>
+
             <Link href="/">
               <Image src={logo} height={50} width={50} alt="logo" />
             </Link>
@@ -488,8 +492,8 @@ export default function ChatInterface() {
                   <div
                     className={`w-full sm:w-auto sm:max-w-[80%] md:max-w-2xl p-3 sm:p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
                       message.role === "assistant"
-                        ? "bg-blue-50 dark:bg-gray-800"
-                        : "bg-white dark:bg-gray-700"
+                        ? "bg-blue-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                        : "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     }`}
                   >
                     <div className="flex items-center mb-2 text-sm sm:text-base">
