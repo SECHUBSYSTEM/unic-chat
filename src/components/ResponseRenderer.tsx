@@ -48,8 +48,8 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
 
   return (
     <div
-      className={`w-full max-w-3xl mx-auto my-4 p-4 rounded-lg shadow-md ${
-        isUser ? "bg-blue-100" : "bg-gray-400"
+      className={`w-full max-w-3xl sm:max-w-[80%] mx-auto my-4 p-4 rounded-lg shadow-md ${
+        isUser ? "bg-blue-100" : "bg-gray-100 dark:bg-gray-500 text-white"
       }`}
     >
       <div className="prose max-w-none">
@@ -71,6 +71,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
                       margin: "1em 0",
                       borderRadius: "0.375rem",
                       padding: "1em",
+                      overflowX: "auto",
                       fontSize: "0.875rem",
                       lineHeight: "1.5",
                     }}

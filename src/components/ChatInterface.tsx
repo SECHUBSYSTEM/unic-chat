@@ -55,20 +55,14 @@ export default function ChatInterface() {
   const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 1,
-      role: "assistant",
-      content: "How can I help you today?",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [showWelcomeMessage, setShowWelcomeMessage] = useState<boolean>(true);
   const [inputContent, setInputContent] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
   const mobileSidebarRef = useRef<HTMLDivElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const { executeCommand } = useCommandExecution();
   const { sendMessage, isLoading, stopGeneration } = useLLMAPI();
@@ -111,19 +105,15 @@ export default function ChatInterface() {
     scrollToBottom();
   }, [messages, isGenerating]);
 
-  // Function to scroll to bottom
   const scrollToBottom = () => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
-        behavior: "smooth",
-      });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   // Function to handle sending a message
   const handleSendMessage = useCallback(async () => {
     if (inputContent.trim()) {
+      setShowWelcomeMessage(false);
+
       // Check for commands
       const commandRegex = /\[include-url:[^\]]+\]/g;
       const commands = inputContent.match(commandRegex);
@@ -471,10 +461,21 @@ export default function ChatInterface() {
 
         {/* Chat Area */}
         <div className="flex-1 overflow-hidden pt-16 pb-24">
-          <ScrollArea
-            className="h-full p-2 sm:p-4 space-y-4 overflow-y-auto"
-            ref={scrollAreaRef}
-          >
+          <ScrollArea className="h-full p-2 sm:p-4 space-y-4 overflow-y-auto">
+            {showWelcomeMessage && messages.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+                className="flex justify-center items-center h-full"
+              >
+                <div className="text-center p-8 bg-blue-50 dark:bg-gray-800 rounded-xl shadow-md">
+                  <h2 className="text-2xl font-bold mb-4">Welcome to UNIC!</h2>
+                  <p className="text-lg">How can I assist you today?</p>
+                </div>
+              </motion.div>
+            )}
             <AnimatePresence>
               {messages.map((message) => (
                 <motion.div
@@ -490,7 +491,7 @@ export default function ChatInterface() {
                   } mb-4`}
                 >
                   <div
-                    className={`w-full sm:w-auto sm:max-w-[80%] md:max-w-2xl p-3 sm:p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
+                    className={`w-full sm:w-auto sm:max-w-[75%] md:max-w-2xl p-3 sm:p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
                       message.role === "assistant"
                         ? "bg-blue-50 dark:bg-gray-800"
                         : "bg-white dark:bg-gray-700"
@@ -611,7 +612,7 @@ export default function ChatInterface() {
         {/* Input Area */}
         <div className="bg-white dark:bg-gray-800 p-2 sm:p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg fixed bottom-0 left-0 right-0 z-10">
           <div className="flex items-end space-x-2 max-w-4xl mx-auto">
-            <div className="flex-shrink-0 flex items-center space-x-0">
+            <div className="flex-shrink-0 flex items-center">
               <CommandInsertion onInsert={handleInsertCommand} />
             </div>
             <div className="flex-grow w-full overflow-auto sm:max-w-2xl">
@@ -622,7 +623,7 @@ export default function ChatInterface() {
                 minHeight="35px"
               />
             </div>
-            <div className="flex-shrink-0 flex items-center space-x-2">
+            <div className="flex-shrink-0">
               {isGenerating ? (
                 <Button
                   size="icon"
