@@ -492,8 +492,8 @@ export default function ChatInterface() {
                   <div
                     className={`w-full sm:w-auto sm:max-w-[80%] md:max-w-2xl p-3 sm:p-4 rounded-xl shadow-md transition-all duration-200 overflow-x-auto ${
                       message.role === "assistant"
-                        ? "bg-blue-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                        : "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        ? "bg-blue-50 dark:bg-gray-800"
+                        : "bg-white dark:bg-gray-700"
                     }`}
                   >
                     <div className="flex items-center mb-2 text-sm sm:text-base">
