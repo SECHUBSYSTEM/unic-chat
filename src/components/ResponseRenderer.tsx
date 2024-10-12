@@ -49,7 +49,7 @@ export const ResponseRenderer: React.FC<ResponseRendererProps> = ({
   return (
     <div
       className={`w-full max-w-3xl mx-auto my-4 p-4 rounded-lg shadow-md ${
-        isUser ? "bg-blue-100" : "bg-gray-100"
+        isUser ? "bg-blue-100" : "bg-gray-400"
       }`}
     >
       <div className="prose max-w-none">
