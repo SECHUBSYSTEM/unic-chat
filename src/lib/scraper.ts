@@ -82,8 +82,8 @@ export async function scrapeWebsite(
     // Log stored content if store is true
     if (store) {
       console.log(
-        "Storing content (first 100 characters):",
-        text.slice(0, 100)
+        "Storing content (first 60 characters):",
+        text.slice(0, 60)
       );
     }
 
